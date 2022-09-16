@@ -230,7 +230,60 @@ def df_data_partition(df, is_valid = False):
     return [user_train, user_test, usernum, itemnum]
 
 
+class partional():
+  
+    def __init__():
+        
+        
+    def partition(df, is_valid, label_names, num_of_labels):
+        usernum = 0
+        itemnum = 0
+    
+        count_via_labels = np.zeros(num_of_labels)
 
+    
+        User = defaultdict(list)
+        review_labels = defaultdict(list)
+        final_idx = -1
+        if is_valid:
+            final_idx = -2
+    
+        user_train = {'item_ids':{},'review_ids':{}}
+        user_test  = {'item_ids':{},'review_ids':{}}
+    
+        for idx, row in df.iterrows():
+            u = row['user_id']
+            i = row['item_id']
+        
+        usernum = max(u, usernum)
+        itemnum = max(i, itemnum)
+        User[u].append(i)
+        
+        if row['fake_review'] == 'fake':
+            User_review[u].append(1)
+            fake_review_cnt += 1
+        else :
+            User_review[u].append(2)
+            real_review_cnt += 1
+        
+    for user in User:
+        nfeedback = len(User[user])
+        if nfeedback < 2:
+            user_train['item_ids'][user] = User[user]
+            user_train['review_ids'][user] = User_review[user]
+            user_test['item_ids'][user] = []
+            user_test['review_ids'][user] = []
+        else:
+            user_train['item_ids'][user] = User[user][:final_idx]
+            user_train['review_ids'][user] = User_review[user][:final_idx]
+            user_test['item_ids'][user] = []
+            user_test['item_ids'][user].append(User[user][final_idx])
+            user_test['review_ids'][user] = []
+            user_test['review_ids'][user].append(User_review[user][final_idx])    
+    
+    print(f'number of fake review:{fake_review_cnt}, number of real review:{real_review_cnt}')
+    return [user_train, user_test, usernum, itemnum]
+        
    
 # TODO: merge evaluate functions for test and val set
 # evaluate on test set
