@@ -18,97 +18,6 @@ def random_neq(l, r, s):
     return t
 
 
-def sample_function(user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED):
-    def sample():
-
-        user = np.random.randint(1, usernum + 1)
-        while len(user_train[user]) <= 1: user = np.random.randint(1, usernum + 1)
-
-        seq = np.zeros([maxlen], dtype=np.int32)
-        pos = np.zeros([maxlen], dtype=np.int32)
-        neg = np.zeros([maxlen], dtype=np.int32)
-        nxt = user_train[user][-1]
-        idx = maxlen - 1
-
-        ts = set(user_train[user])
-        for i in reversed(user_train[user][:-1]):
-            seq[idx] = i
-            pos[idx] = nxt
-            if nxt != 0: neg[idx] = random_neq(1, itemnum + 1, ts)
-            nxt = i
-            idx -= 1
-            if idx == -1: break
-
-        return (user, seq, pos, neg)
-
-    np.random.seed(SEED)
-    while True:
-        one_batch = []
-        for i in range(batch_size):
-            one_batch.append(sample())
-
-        result_queue.put(zip(*one_batch))
-
-
-class WarpSampler(object):
-    def __init__(self, User, usernum, itemnum, batch_size=64, maxlen=10, n_workers=1):
-        self.result_queue = Queue(maxsize=n_workers * 10)
-        self.processors = []
-        for i in range(n_workers):
-            self.processors.append(
-                Process(target=sample_function, args=(User,
-                                                      usernum,
-                                                      itemnum,
-                                                      batch_size,
-                                                      maxlen,
-                                                      self.result_queue,
-                                                      np.random.randint(2e9)
-                                                      )))
-            self.processors[-1].daemon = True
-            self.processors[-1].start()
-
-    def next_batch(self):
-        return self.result_queue.get()
-
-    def close(self):
-        for p in self.processors:
-            p.terminate()
-            p.join()
-
-
-# train/val/test data generation
-def data_partition(fname):
-    usernum = 0
-    itemnum = 0
-    User = defaultdict(list)
-    user_train = {}
-    user_valid = {}
-    user_test = {}
-    # assume user/item index starting from 1
-    f = open('data/%s.txt' % fname, 'r')
-    for line in f:
-        u, i = line.rstrip().split(' ')
-        u = int(u)
-        i = int(i)
-        usernum = max(u, usernum)
-        itemnum = max(i, itemnum)
-        User[u].append(i)
-
-    for user in User:
-        nfeedback = len(User[user])
-        if nfeedback < 3:
-            user_train[user] = User[user]
-            user_valid[user] = []
-            user_test[user] = []
-        else:
-            user_train[user] = User[user][:-2]
-            user_valid[user] = []
-            user_valid[user].append(User[user][-2])
-            user_test[user] = []
-            user_test[user].append(User[user][-1])
-    return [user_train, user_valid, user_test, usernum, itemnum]
-
-
 def sample_function_fr(user_train, usernum, itemnum, batch_size, maxlen, result_queue, SEED):
     def sample():
 
@@ -255,34 +164,34 @@ class partional():
             u = row['user_id']
             i = row['item_id']
         
-        usernum = max(u, usernum)
-        itemnum = max(i, itemnum)
-        User[u].append(i)
+            usernum = max(u, usernum)
+            itemnum = max(i, itemnum)
+            User[u].append(i)
         
-        if row['fake_review'] == 'fake':
-            User_review[u].append(1)
-            fake_review_cnt += 1
-        else :
-            User_review[u].append(2)
-            real_review_cnt += 1
+            if row['fake_review'] == 'fake':
+                User_review[u].append(1)
+                fake_review_cnt += 1
+            else :
+                User_review[u].append(2)
+                real_review_cnt += 1
         
-    for user in User:
-        nfeedback = len(User[user])
-        if nfeedback < 2:
-            user_train['item_ids'][user] = User[user]
-            user_train['review_ids'][user] = User_review[user]
-            user_test['item_ids'][user] = []
-            user_test['review_ids'][user] = []
-        else:
-            user_train['item_ids'][user] = User[user][:final_idx]
-            user_train['review_ids'][user] = User_review[user][:final_idx]
-            user_test['item_ids'][user] = []
-            user_test['item_ids'][user].append(User[user][final_idx])
-            user_test['review_ids'][user] = []
-            user_test['review_ids'][user].append(User_review[user][final_idx])    
+        for user in User:
+            nfeedback = len(User[user])
+            if nfeedback < 2:
+                user_train['item_ids'][user] = User[user]
+                user_train['review_ids'][user] = User_review[user]
+                user_test['item_ids'][user] = []
+                user_test['review_ids'][user] = []
+            else:
+                user_train['item_ids'][user] = User[user][:final_idx]
+                user_train['review_ids'][user] = User_review[user][:final_idx]
+                user_test['item_ids'][user] = []
+                user_test['item_ids'][user].append(User[user][final_idx])
+                user_test['review_ids'][user] = []
+                user_test['review_ids'][user].append(User_review[user][final_idx])    
     
-    print(f'number of fake review:{fake_review_cnt}, number of real review:{real_review_cnt}')
-    return [user_train, user_test, usernum, itemnum]
+        print(f'number of fake review:{fake_review_cnt}, number of real review:{real_review_cnt}')
+        return [user_train, user_test, usernum, itemnum]
         
    
 # TODO: merge evaluate functions for test and val set
@@ -679,17 +588,7 @@ def evaluation(model, dataset, maxlen, device):
         
         predictions = -model.predict(u, seq, rsq, torch.LongTensor(candidate_items).to(device))
         
-        #print(candidate_items)
-        #print(predictions)
-        #print(predictions.size())
-        #print(predictions.argsort())
-        #print(predictions.argsort().argsort())
-        
         rank = predictions.argsort().argsort()[0].item()
-        #print(rank)
-        
-        #raise('stop')
-        #rank = predictions[0].argsort().argsort()[0].item()
 
         valid_user += 1
         

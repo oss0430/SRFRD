@@ -114,7 +114,7 @@ if __name__ == '__main__':
     wandb.init(project="SRFR Multiple 6 Model Train,Test")
     
     #device = 'cuda' if cuda.is_available() else 'cpu'
-    device = 'cpu'
+    device = 'cuda'
     
     config = wandb.config
     config.inference_only = False
@@ -415,76 +415,4 @@ if __name__ == '__main__':
     print(resultByEpoch)
     print("Done")
     
-    
-    """
-    T = 0.0
-    t0 = time.time()
-    
-    for epoch in range(config.num_epochs):
-        if config.inference_only: break
-        
-        epoch_loss = 0
-        
-        for step in range(num_batch): # tqdm(range(num_batch), total=num_batch, ncols=70, leave=False, unit='b'):
-            u, seq, rsq, pos, prs, neg, nrs = sampler.next_batch() # tuples to ndarray
-            u, seq, rsq, pos, prs, neg, nrs = np.array(u), np.array(seq), np.array(rsq), np.array(pos), np.array(prs), np.array(neg) , np.array(nrs)
-            u, seq, rsq, pos, prs, neg, nrs = torch.LongTensor(u).to(device), torch.LongTensor(seq).to(device), torch.LongTensor(rsq).to(device), torch.LongTensor(pos).to(device), torch.LongTensor(prs).to(device), torch.LongTensor(neg).to(device), torch.LongTensor(nrs).to(device),
-            #print(u.shape,seq.shape,rsq.shape,pos.shape,neg.shape)
-            hidden_state, pos_logits, neg_logits = model(user_ids = u , input_ids = seq, fake_ids = rsq, positive_ids = pos, positive_fake_ids=prs, negative_ids = neg, negative_fake_ids=nrs)
-            pos_labels, neg_labels = torch.ones(pos_logits.shape, device=device), torch.zeros(neg_logits.shape, device=device)
-            #print("\neye ball check raw_logits:")
-            #print(pos_logits)
-            #print(neg_logits) # check pos_logits > 0, neg_logits < 0
-            adam_optimizer.zero_grad()
-            indices = torch.where(pos != 0)
-            loss = bce_criterion(pos_logits[indices], pos_labels[indices])
-            loss += bce_criterion(neg_logits[indices], neg_labels[indices])
-            for param in model.parameters(): loss += config.l2_emb * torch.norm(param)
-            loss.backward()
-            adam_optimizer.step()
-            print("loss in epoch {} iteration {}: {}".format(epoch+1, step, loss.item())) # expected 0.4~0.6 after init few epochs
-            wandb.log({"Training Loss by iteration": loss.item()})
-            epoch_loss += loss.item()
-            
-            #raise('stop')
-        
-        wandb.log({"Training Loss by Epoch": epoch_loss,
-                   "Epochs":epoch+1})
-        
-        if (epoch+1) % 1 == 0:
-            model.eval()
-            t1 = time.time() - t0
-            T += t1
-            print('Evaluating is_validation:',config.is_validation, end='')
-            t_test = evaluation(model, dataset, config.maxlen, device)
-            print('epoch:%d, time: %f(s), (NDCG@10: %.4f, HR@10: %.4f)'
-                    % (epoch, T, t_test[0], t_test[1]))
-            wandb.log({"NDCG@10": t_test[0],
-                       "HT@10":t_test[1]})
-            t0 = time.time()
-            
-            
-            model.train()
-    """
-        #if epoch == config.num_epochs - 1:
-        #    if not config.inference_only :
-        #        torch.save(model.state_dict(), 'model/SRFR.pt')
-        #        print("Exporting Model parameters at 'model/SRFR.pt'")
-        #    checkSRFRNudgeUserEmbedding(config.maxlen,model,device)
-    
-    #checkSRFRNudgeUserEmbedding(config.maxlen,model,device)
-    """
-    temp0, temp1, userLabelviaResult, userResults = evaluation_nudge(model, dataset, config.maxlen, device)
-    
-    wandb.log({"final_NDCG@10":temp0,
-                "final_HT@10":temp1})
-    
-    pd.DataFrame.from_dict(userLabelviaResult,orient='index',columns=['HT@10','NDCG@10','user_cnt']).to_csv('resultvialabel.csv')
-    pd.DataFrame.from_dict(userResults,orient='index',columns=['rank', 'user_HIT@10', 'user_NDCG@10', 'user_real_reviews', 'user_fake_reviews']).to_csv('userResults.csv')
-    
-    if ~config.inference_only :
-        torch.save(model.state_dict(), 'model/SRFR_SASRec.pt')
-        print("Exporting Model parameters at 'model/SRFR_SASRec.pt'")
-    """
-    #sampler.close()
-    #print("Done")
+ 
