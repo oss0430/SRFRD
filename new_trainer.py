@@ -104,13 +104,35 @@ def checkUserRepresentationViaLabel(
         group_count = count_friend_relation(label_dict[label_index], friend_dict)
         number_of_friend_relations[label_index] = group_count
     
-    plt.bar(range(len(number_of_friend_relations)), list(number_of_friend_relations.vales()), align='center')
+    plt.bar(range(len(number_of_friend_relations)), list(number_of_friend_relations.values()), align='center')
     plt.xticks(range(len(number_of_friend_relations)), list(number_of_friend_relations.keys()))
     
     plt.show()  
     
 
-
+def checkUserRepresentationViaCosSim(
+    model,
+    dataset,
+    maxlen,
+    friend_dict,
+    device)
+    
+    """
+    for each user we check its frineds
+    
+    measure avg cos_similarity with user and his/her friends
+    
+    group avg cos_similarity with window size of 0.05
+    """
+    
+    similarity_dict = group_user_via_embeddingSimilarity(model, dataset, maxlen, friend_dict)
+    
+    plt.bar(range(len(similarity_dict)), list(similarity_dict.values()),align='center')
+    plt.xticks(range(len(similarity_dict)), list(similarity_dict.keys()))
+    
+    plt.show()
+    
+    return similarity_dict
 
 if __name__ == '__main__':
     wandb.init(project="SRFR Multiple 6 Model Train,Test")
@@ -136,6 +158,7 @@ if __name__ == '__main__':
     #config.dataset_path = 'data/Sports_and_Outdoors.csv'
     #config.dataset_path = 'data/beauty.csv'
     config.is_validation = False
+    config.friend_path = ''
     
     print('running on',device);
     print(config)
@@ -152,6 +175,11 @@ if __name__ == '__main__':
     [user_train, user_test, usernum, itemnum] = dataset
     num_batch = len(user_train['item_ids']) // config.train_batch_size # tail? + ((len(user_train) % args.batch_size) != 0)
     cc = 0.0
+    
+    df_friends = pd.read_csv(config.friend_path)
+    print(df_friends.head(5))
+    
+    friend_dict = df_friends.to_dict()
     
     
     for u in user_train['item_ids']:
@@ -254,9 +282,12 @@ if __name__ == '__main__':
         pd.DataFrame.from_dict(resultforExport[4],orient='index',columns=['NDCG@10','HT@10','number']).to_csv('result/result_FL_model_'+str(model_index)+'.csv')
         pd.DataFrame.from_dict(resultforExport[5],orient='index',columns=['NDCG@10','HT@10','number']).to_csv('result/result_RL_model_'+str(model_index)+'.csv')
         
+        ## added for friend similarity
+        pd.DataFrame.from_dict(checkUserRepresentationViaCosSim(single_model,dataset,config.maxlen,friend_dict,device))
+        
         if ~config.inference_only :
-            torch.save(single_model.state_dict(), 'model/SRFR_'+str(model_index)+'.pt')
-            print("Exporting Model parameters at 'model/SRFR_"+str(model_index)+".pt'")
+            torch.save(single_model.state_dict(), 'model/SRFR_YELP'+str(model_index)+'.pt')
+            print("Exporting Model parameters at 'model/SRFR_YELP"+str(model_index)+".pt'")
     
     sampler.close()
     

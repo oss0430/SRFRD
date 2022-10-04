@@ -4,6 +4,7 @@ import torch
 import random
 import math
 import numpy as np
+import torch
 from collections import defaultdict
 from multiprocessing import Process, Queue
 
@@ -137,7 +138,7 @@ def df_data_partition(df, is_valid = False):
     
     print(f'number of fake review:{fake_review_cnt}, number of real review:{real_review_cnt}')
     return [user_train, user_test, usernum, itemnum]
-
+    
 
 class partional():
   
@@ -669,7 +670,68 @@ def count_friend_relation(group, friend_dict):
                     pass
                     
     return friend_count
-            
+
+def group_user_via_embeddingSimilarity(model, dataset, maxlen, friend_dict):
+    [train, test, usernum, itemnum] = copy.deepcopy(dataset)
+    
+    users = range(1,usernum + 1)
+    
+    cosi = torch.nn.CosineSimilarity(dim=0)
+    
+    hidden_state_dict = defaultdict()
+    similarity_dict = defaultdict(0)
+    
+    ##similarity groups [x,x+0.05)
+    
+    model.eval()
+    
+    for u in users:
+        if len(train['item_ids'][u]) < 1 or len(test['item_ids'][u]) < 1: continue
+        
+        seq = np.zeros([maxlen], dtype=np.int32)
+        rsq = np.zeros([maxlen], dtype=np.int32)
+        idx_item   = maxlen - 1
+        idx_review = maxlen - 1
+        
+        for i in reversed(train['item_ids'][u]):
+            seq[idx_item] = i
+            idx_item -= 1
+            if idx_item == -1:break
+        
+        for r in reversed(train['review_ids'][u]):
+            rsq[idx_review] = r
+            idx_review -= 1
+            if idx_review == -1: break 
+        
+        rated = set(train['item_ids'][u])
+        rated.add(0)
+        candidate_items = [test['item_ids'][u][0]]
+        
+        u   = torch.LongTensor(u).to(device)
+        seq = torch.LongTensor(seq.reshape(1, -1)).to(device)
+        rsq = torch.LongTensor(rsq.reshape(1, -1)).to(device)
+        
+        hidden_state, pos_logits, neg_logits = model.forward(u, seq, rsq)
+        
+        hidden_state_dict(u) = hidden_state
+    
+    
+    for u, user_hidden_state in hidden_state_dict.items():
+        
+        cos_sim_sum = 0
+        
+        
+        if friend_dict[u] not None:
+            for friend in friend_dict[u] :
+                friend_hidden_state = hidden_state_dict[friend]
+                
+                cos_sim_sum += cosi(user_hidden_state, friend_hidden_state)
+                
+            avg_similarity = cos_sim_sum / len(firned_dict[u])
+            similarity_dict[avg_similarity//0.05] += 1 
+            ## calculate average cos similarity amongs friends
+    
+    return similarity_dict
 
 def evaluation_with_label(model, dataset, maxlen, device):
     [train, test, usernum, itemnum] =  copy.deepcopy(dataset)
