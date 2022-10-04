@@ -679,4 +679,3 @@ class SASRec(torch.nn.Module):
         # preds = self.pos_sigmoid(logits) # rank same item list for different users
 
         return logits # preds # (U, I)  
-        

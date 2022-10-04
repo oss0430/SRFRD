@@ -625,6 +625,52 @@ def get_ratio_label(rsq):
     
     return fake_label
 
+
+def group_user_via_label(labeling_function,dataset,maxlen):
+    [train, test, usernum, itemnum] = copy.deepcopy(dataset)
+    
+    users = range(1,usernum + 1)
+    
+    label_dict = defaultdict(list)
+    
+    for u in users :
+        
+        rsq = np.zeros([maxlen], dtype=np.int32)
+
+        idx_review = maxlen - 1
+        
+        for r in reversed(train['review_ids'][u]):
+            rsq[idx_review] = r
+            idx_review -= 1
+            if idx_review == -1: break 
+        
+        user_real_reviews = np.count_nonzero(rsq == 2)
+        user_fake_reviews = np.count_nonzero(rsq == 1)
+        
+        current_user_label = labeling_function(rsq)
+    
+        label_dict(current_user_label).append(u)
+        
+    return label_dict
+
+
+def count_friend_relation(group, friend_dict):
+    
+    friend_count = 0
+    
+    for idx, u in enumerate(group) :
+        for usfriend in friend_dict(u) :
+            if usfriend < u :
+                pass
+            else :
+                if group[idx+1:].find(usfriend) :
+                    friend_count = 0
+                else :
+                    pass
+                    
+    return friend_count
+            
+
 def evaluation_with_label(model, dataset, maxlen, device):
     [train, test, usernum, itemnum] =  copy.deepcopy(dataset)
     
