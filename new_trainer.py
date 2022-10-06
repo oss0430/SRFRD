@@ -98,14 +98,10 @@ def checkUserRepresentationViaLabel(
     number_of_friend_relations = defaultdict()
     
     
-    label_dict = group_user_via_label(labeling_function,dataset,maxlen)
+    MAE_scaled_dict = group_user_vial_labelMAE(labeling_function,dataset,maxlen)
     
-    for label_index in number_of_labels :
-        group_count = count_friend_relation(label_dict[label_index], friend_dict)
-        number_of_friend_relations[label_index] = group_count
-    
-    plt.bar(range(len(number_of_friend_relations)), list(number_of_friend_relations.values()), align='center')
-    plt.xticks(range(len(number_of_friend_relations)), list(number_of_friend_relations.keys()))
+    plt.bar(range(len(MAE_scaled_dict)), list(MAE_scaled_dict.values()), align='center')
+    plt.xticks(range(len(MAE_scaled_dict)), list(MAE_scaled_dict.keys()))
     
     plt.show()  
     

@@ -654,6 +654,58 @@ def group_user_via_label(labeling_function,dataset,maxlen):
         
     return label_dict
 
+def group_user_vial_labelMAE(labeling_function, label_list, dataset, maxlen, friend_dict)
+    [train, test, usernum, itemnum] = copy.deepcopy(dataset)
+    """
+    This is used when user label's index represent magnitute
+     
+    """
+    
+    users - range(1, usernum + 1)
+    
+    label_dict = defaultdict()
+    MAE_scaled_dict = defaultdict(0)
+    
+    #for standadization
+    label_number = len(label_list)
+    label_average = sum(label_list) / len(label_list)
+    
+    for u in users :
+        
+        rsq = np.zeros([maxlen], dtype=np.int32)
+
+        idx_review = maxlen - 1
+        
+        for r in reversed(train['review_ids'][u]):
+            rsq[idx_review] = r
+            idx_review -= 1
+            if idx_review == -1: break
+            
+        current_user_label = labeling_function(rsq)
+    
+        label_dict[u] = current_user_label
+    
+    
+    for u, user_label in label_dict.items :
+        
+        MAE = 0
+        
+        if friend_dict[u] not None:
+            for friend in friend_dict[u] :
+                friend_label = label_dict[friend]
+                
+                MAE += abs(user_label - friend_label)
+                
+            MAE = label_sim_sum / len(firned_dict[u])
+            
+            MAE_scaled = MAE / (label_number - 1)
+            
+            MAE_scaled_dict[MAE_scaled//0.05] += 1 
+
+    
+    return MAE_scaled_dict
+
+
 
 def count_friend_relation(group, friend_dict):
     
