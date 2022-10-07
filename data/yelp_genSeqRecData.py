@@ -5,8 +5,8 @@ import gzip
 import json
 import pandas as pd
 import numpy as np
-
-
+import tqdm
+import time
 
 from collections import defaultdict
 from datetime import datetime
@@ -47,12 +47,12 @@ def amazon_load_getDF(path):
     
 def yelp_load_getDF(path):
     
-    #max_index = 10000
+    #max_index = 1000000
     parsed_dict = {}
     #review_dataframe = pd.DataFrame(columns=['user_id','item_id','date','text'])
     i = 0
     with open(path) as fin:
-        for line in (fin):
+        for line in tqdm(fin):
         
             #if i == max_index :
             #   break
@@ -62,7 +62,7 @@ def yelp_load_getDF(path):
             parsed_dict[i] = {'user_id':line_contents['user_id'], 'item_id' : line_contents['business_id'], 'time' : line_contents['date'], 'review' : line_contents['text']}
             i += 1
             
-            if(i%1000 == 0): print(i)
+            #if(i%1000 == 0): print(i)
             #review_dataframe = pd.concat([review_dataframe, pd.DataFrame({'user_id':[line_contents['user_id']], 'item_id' : [line_contents['business_id']], 'time' : [line_contents['date']], 'review' : [line_contents['text']]})])
     
     #review_datafrmae
@@ -81,7 +81,7 @@ def yelp_load_friend_getDF(path):
     #user_dataframe = pd.DataFrame(columns=['user_id','friend_list'])
     i = 0
     with open(path) as fin:
-        for line in fin:
+        for line in tqdm(fin):
             #if i == max_index :
             #    break
             
@@ -90,7 +90,7 @@ def yelp_load_friend_getDF(path):
             parsed_dict[i] = {'user_id':line_contents['user_id'], 'friend_list' : friend_list}
             
             i += 1
-            if(i%1000 == 0): print(i)
+            #if(i%1000 == 0): print(i)
             
             #user_dataframe = pd.concat([user_dataframe, pd.DataFrame({'user_id':[line_contents['user_id']], 'friend_list' : [friend_list]})])
             
@@ -120,15 +120,14 @@ def count_elements(df, column_map):
     user_id_column_name = column_map['user_id']
     item_id_column_name = column_map['item_id']
     
-    for idx, row in df.iterrows():
+    for idx, row in tqdm(df.iterrows(),total=len(df)):
         item_raw_id = row[item_id_column_name]
         user_raw_id = row[user_id_column_name]
         
         countU[user_raw_id] += 1
         countI[item_raw_id] += 1
         
-        if idx%1000 == 0 :
-            print(idx)
+        #if idx%1000 == 0 :    print(idx)
         
     return countU, countI
 
@@ -172,7 +171,11 @@ def clean_friend(dfUserMap,dfFriend,column_map):
 def clean_review(df, column_map):
     
     dfUserMap = pd.DataFrame(columns=['user_id'])
+    userMapDict = {}
+    
     dfItemMap = pd.DataFrame(columns=['item_id'])
+    itemMapDict = {}
+    
     dfReviewClean = pd.DataFrame(columns=['user_id','time','item_id','review'])
     
     user_id_column_name = column_map['user_id']
@@ -196,7 +199,7 @@ def clean_review(df, column_map):
     #
     #
     
-    for idx, row in df.iterrows():
+    for idx, row in tqdm(df.iterrows(),total=len(df)):
     
         user_raw_id = row[user_id_column_name]
         item_raw_id = row[item_id_column_name]
@@ -210,28 +213,49 @@ def clean_review(df, column_map):
         #print("dicide wheater to use or discard : ",end_time - start_time)
         
         #start_time = time.time()
+        """
         if user_raw_id in dfUserMap.values: #already exist in the Map
             userid = dfUserMap.index[dfUserMap['user_id']==user_raw_id].tolist()[0]
+        """
+        if user_raw_id in userMapDict:
+            user_id = userMapDict[user_raw_id]
         
+        else:
+            usernum += 1
+            userid = usernum
+            userMapDict[user_raw_id] = usernum
+        """            
         else: #non existing User in Map make one
             usernum += 1
             userid = usernum
             newUser = pd.DataFrame({'user_id':[user_raw_id]},index=[userid])
             dfUserMap = pd.concat([dfUserMap,newUser])
+        """
         #end_time = time.time()
         #print("search in map or add in user : ",end_time - start_time)
         
         
         #start_time = time.time()
+        """
         if item_raw_id in dfItemMap.values: #already exist in the Map
     
             itemid = dfItemMap.index[dfItemMap['item_id']==item_raw_id].tolist()[0]
+        """
+        if item_raw_id in itemMapDict:
+            itemid = itemMapDict[item_raw_id]
         
+        else:
+            itemnum += 1
+            itemid = itemnum
+            itemMapDict[item_raw_id] = itemid
+        
+        """
         else: #non existing Item in Map make one
             itemnum += 1
             itemid = itemnum
             newItem = pd.DataFrame({'item_id':[item_raw_id]},index=[itemid])
             dfItemMap = pd.concat([dfItemMap,newItem])
+        """
         #end_time = time.time()
         #print("search in map or add in item : ",end_time - start_time)
         
@@ -244,14 +268,15 @@ def clean_review(df, column_map):
         #print(newReviewClean)
         #dfReviewClean = pd.concat([dfReviewClean,newReviewClean], ignore_index=True)
         
-        if idx % 1000 == 0:
-            print(idx)
+        #if idx % 1000 == 0:
+        #    print(idx)
     
     dfReviewClean = pd.DataFrame(clean_review_list, columns=['user_id','time','item_id','review'])
     print("cleaning complete now sorting")    
     dfReviewClean.sort_values(by=['user_id','time'], inplace=True)   
     
-    return dfUserMap, dfItemMap, dfReviewClean
+    return userMapDict, itemMapDict, dfReviewClean
+    #return dfUserMap, dfItemMap, dfReviewClean
     
 def main():
     """
@@ -313,8 +338,9 @@ def main():
     
     if use_review:
         print("Cleaning Review")    
-        dfUserMap, dfItemMap, dfReviewClean = clean_review(dfReview, column_map)
-    
+        #dfUserMap, dfItemMap, dfReviewClean = clean_review(dfReview, column_map)
+        userMapDict, itemMapDict, dfReviewClean = clean_review(dfReview, column_map)
+        
         print("Cleaning Review Complete")
         print(dfReviewClean.head(10))
     
@@ -335,7 +361,7 @@ def main():
     
     if save_user_map :
         print("Exporting User Map")
-        dfUserMap.to_csv("UserMap_" + dataset_name + ".csv")
+        pd.DataFrame.from_dict(userMapDict,orient = 'index').to_csv("UserMap_" + dataset_name + ".csv")
         print("Exporting User Map Complete")
         
     if use_friend :
