@@ -47,7 +47,7 @@ def amazon_load_getDF(path):
     
 def yelp_load_getDF(path):
     
-    #max_index = -1
+    #max_index = 10000
     parsed_dict = {}
     #review_dataframe = pd.DataFrame(columns=['user_id','item_id','date','text'])
     i = 0
@@ -75,7 +75,7 @@ def text_to_list(text):
     
 def yelp_load_friend_getDF(path):
     
-    #max_index = 1000
+    #max_index = 10000
     
     parsed_dict = {}
     #user_dataframe = pd.DataFrame(columns=['user_id','friend_list'])
@@ -137,7 +137,7 @@ def clean_friend(dfUserMap,dfFriend,column_map):
     
     dfFriendClean = pd.DataFrame(columns=['user_id','friend_list'])
     
-    
+    friendClean = []
     friend_user_id_column_name = column_map['friend_user_id']
     friend_friend_list_column_name = column_map['friend_friend_list']
     
@@ -154,17 +154,20 @@ def clean_friend(dfUserMap,dfFriend,column_map):
         clean_friend_list = []
         
         for friend in friend_list :
-            if friend not in dfUserMap.values: #don't exist in the Map
+            if friend not in dfUserMap: #don't exist in the Map
                 pass
                 
             else :
                 clean_friend_list.append(dfUserMap[friend])
         
-        newFriendClean = pd.DataFrame.from_dict({'user_id':[userid],'friend_list':[clean_friend_list]})
-        dfFriendClean  = pd.concat([dfFriendClean,newFriendClean], ignore_index=True)
+        if len(clean_friend_list) > 0 :
+            friendClean.append(newFriendClean)# = pd.DataFrame.from_dict({'user_id':[userid],'friend_list':[clean_friend_list]})
+            #dfFriendClean  = pd.concat([dfFriendClean,newFriendClean], ignore_index=True)
         
+        if idx % 1000 == 0:
+            print(idx)
                 
-    return dfFriendClean
+    return pd.DataFrame(friendClean,columns=['user_id','friend_list'])
 
 def clean_review(df, column_map):
     
@@ -190,7 +193,8 @@ def clean_review(df, column_map):
     clean_review_list = []
     #user_map_list = []
     #item_map_list = []
-    
+    #
+    #
     
     for idx, row in df.iterrows():
     
@@ -243,7 +247,7 @@ def clean_review(df, column_map):
         if idx % 1000 == 0:
             print(idx)
     
-    dfReviewClean = pd.DataFrame(clean_review_list, 'index', columns=['user_id','time','item_id','review'])
+    dfReviewClean = pd.DataFrame(clean_review_list, columns=['user_id','time','item_id','review'])
     print("cleaning complete now sorting")    
     dfReviewClean.sort_values(by=['user_id','time'], inplace=True)   
     
@@ -312,7 +316,7 @@ def main():
         dfUserMap, dfItemMap, dfReviewClean = clean_review(dfReview, column_map)
     
         print("Cleaning Review Complete")
-        print(dfReviewClean.head(5))
+        print(dfReviewClean.head(10))
     
     if load_user_map:
         print("loading Review")

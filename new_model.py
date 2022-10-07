@@ -5,20 +5,19 @@ from SRFR_model import PointWiseFeedForward
 
 ##
 
-class SRFU_Embedding(nn.Module):
+class SRFR_with_BERT_Embedding(nn.Module):
     ## Embedding Extends item_features with fake/real review discriminations
-    def __init__(self, item_number, item_embedding_size, number_of_labels, dropout_rate, maxlen, device):
-        super(SRFU_Embedding,self).__init__()
+    def __init__(self, item_number, item_embedding_size, fake_embedding_size, dropout_rate, maxlen, device):
+        super(SRFR_Embedding,self).__init__()
         self.item_embed = nn.Embedding(item_number+1, item_embedding_size, padding_idx=0)
-        self.user_label_embed = nn.Embedding(number_of_labels, item_embedding_size) #intensity of fakeness, from 0 most fakes, maxlen*2 least fake(real), maxlen as netural 
+        self.fake_embed = nn.Embedding(3, fake_embedding_size, padding_idx = 0) #0 padding, 1 fake, 2 real
         self.pos_embed  = nn.Embedding(maxlen, item_embedding_size)
+        self.total_hiden_size = item_embedding_size + fake_embedding_size
         self.dropout = nn.Dropout(p=dropout_rate)
         self.device = device
-        self.item_embedding_size = item_embedding_size
-        self.number_of_labels = number_of_labels
-        self.maxlen = maxlen
         
-    def forward(self, input_ids, label_ids):
+    def forward(self, input_ids, fake_ids=None):     
+        
         #print(input_ids.shape)
         batch_size, seq_size = input_ids.shape[:2]
         
@@ -27,77 +26,66 @@ class SRFU_Embedding(nn.Module):
         pos_embed = self.pos_embed(pos_ids)
         input_embed += pos_embed
         
-        user_embed = self.user_label_embed(label_ids.view(batch_size,-1))
+        if fake_ids is None:
+            fake_ids = torch.zeros(batch_size,seq_size).to(self.device).int()
         
-        input_embed = input_embed + user_embed
+        #print(fake_ids)
+        fake_embed = self.fake_embed(fake_ids)
+        input_embed = torch.cat([input_embed,fake_embed], dim=2)
         
         return input_embed
-    
-    def get_user_label_embed(self):
-        return self.user_label_embed
         
-class SRFU_with_BERT(nn.Module):
-    ## Discriminate User with fake/real review counts
+class SRFR_with_BERT(nn.Module):
     def __init__(self,
         item_number,
         max_len = 20,
         item_embedding_size = 50,
-        number_of_labels = 2,
+        fake_embedding_size = 10,
         dropout_rate = 0.5,
         num_blocks = 2,
         num_heads = 1,
         device = 'cpu'
         ):
-        super(SRFU, self).__init__()
+        super(SRFR, self).__init__()
         
         self.device = device
-        self.maxlen = max_len
+        self.total_hidden_size = item_embedding_size + fake_embedding_size
         
-        self.embedding_layer = SRFU_Embedding(item_number, item_embedding_size, number_of_labels, dropout_rate, max_len, device)
+        self.embedding_layer = SRFR_Embedding(item_number, item_embedding_size, fake_embedding_size, dropout_rate, max_len, device)
         self.attention_layernorms = torch.nn.ModuleList() # to be Q for self-attention
         self.attention_layers = torch.nn.ModuleList()
         self.forward_layernorms = torch.nn.ModuleList()
         self.forward_layers = torch.nn.ModuleList()
-
+        
+        
+        self.last_conv = torch.nn.Conv1d(self.total_hidden_size, item_embedding_size, kernel_size = 1)
         self.last_layernorm = torch.nn.LayerNorm(item_embedding_size, eps=1e-8)
         
         for _ in range(num_blocks):
-            new_attn_layernorm = torch.nn.LayerNorm(item_embedding_size, eps=1e-8)
+            new_attn_layernorm = torch.nn.LayerNorm(self.total_hidden_size, eps=1e-8)
             self.attention_layernorms.append(new_attn_layernorm)
 
-            new_attn_layer =  torch.nn.MultiheadAttention(item_embedding_size,num_heads,dropout_rate)
+            new_attn_layer =  torch.nn.MultiheadAttention(self.total_hidden_size,num_heads,dropout_rate)
             self.attention_layers.append(new_attn_layer)
 
-            new_fwd_layernorm = torch.nn.LayerNorm(item_embedding_size, eps=1e-8)
+            new_fwd_layernorm = torch.nn.LayerNorm(self.total_hidden_size, eps=1e-8)
             self.forward_layernorms.append(new_fwd_layernorm)
 
-            new_fwd_layer = PointWiseFeedForward(item_embedding_size, item_embedding_size, dropout_rate)
+            new_fwd_layer = PointWiseFeedForward(self.total_hidden_size, self.total_hidden_size, dropout_rate)
             self.forward_layers.append(new_fwd_layer)
-    
-    def get_Labels(self, fake_ids):
-        
-        user_label_ids = None
-        
-        raise('not implemented result')
-        
-        return user_label_ids
-    
+
     def forward(self, user_ids, input_ids, fake_ids, positive_ids = None, positive_fake_ids = None, negative_ids = None, negative_fake_ids = None): # for training        
-        #print(input_ids[0],positive_ids[0],negative_ids[0])
-        input_embeds  = self.embedding_layer(input_ids, self.get_Labels(fake_ids))
+        
+        input_embeds  = self.embedding_layer(input_ids, fake_ids)
         
         batch_size, seq_length = input_embeds.size()[:2]
         
-        #print(input_embeds.size())
-        
         empty_ids = (input_ids == 0)
-        
         input_embeds  *= ~empty_ids.unsqueeze(-1)
         
         
         non_empty_length = input_embeds.size()[1]
         attention_mask   = ~torch.tril(torch.ones((seq_length, seq_length), dtype=torch.bool)).to(self.device)
-        #since first element in sequence is user (length =  1 dont need chagning in mask) 
         
         hidden_state = input_embeds
         
@@ -117,19 +105,18 @@ class SRFU_with_BERT(nn.Module):
             
             hidden_state *=  ~empty_ids.unsqueeze(-1)
         
-        hidden_state = self.last_layernorm(hidden_state)
+        hidden_state = self.last_conv(hidden_state.transpose(-1,-2))
+        hidden_state = self.last_layernorm(hidden_state.transpose(-1,-2))
         
         #print(hidden_state.size())
         
         pos_logits = None
         if positive_ids is not None :
-            #print(positive_ids.size())
             pos_embs = self.embedding_layer.item_embed(positive_ids).to(self.device)
             pos_logits = (hidden_state * pos_embs).sum(dim=-1)
         
         neg_logits = None    
         if negative_ids is not None :    
-            #print(negative_ids.size())
             neg_embs = self.embedding_layer.item_embed(negative_ids).to(self.device)
             neg_logits = (hidden_state * neg_embs).sum(dim=-1)
         
@@ -147,4 +134,4 @@ class SRFU_with_BERT(nn.Module):
         
         logits = label_embeds.matmul(final_features.unsqueeze(-1)).squeeze()
         
-        return logits # preds # (U, I)
+        return logits # preds # (U, I)    
